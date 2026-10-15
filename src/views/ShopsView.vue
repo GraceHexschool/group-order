@@ -61,7 +61,7 @@ onMounted(() => run(async () => {}))
       <template v-else>
         <div class="grow">
           <a :href="`#/shops/${s.id}`" class="title">{{ s.name }}</a>
-          <span class="muted"> · {{ s.item_count }} 個品項 · {{ s.created_by }} 建立</span>
+          <span class="muted"> · {{ s.item_count }} 個品項 · {{ s.created_by_name }} 建立</span>
           <div v-if="s.note" class="muted">{{ s.note }}</div>
           <a v-if="s.menu_image_url" :href="s.menu_image_url" target="_blank" rel="noopener" class="muted">📷 菜單照片</a>
         </div>

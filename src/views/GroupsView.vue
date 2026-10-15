@@ -66,7 +66,7 @@ onMounted(() => load().catch((e) => (error.value = e.message)))
         <a :href="`#/groups/${g.id}`" class="title">{{ g.shop_name }}</a>
         <span :class="['badge', g.status]">{{ STATUS[g.status] }}</span>
         <div class="muted">
-          {{ g.created_by }} 開團 · 截止 {{ fmtTime(g.deadline) }} · {{ g.order_count }} 筆 · {{ money(g.total) }}
+          {{ g.created_by_name }} 開團 · 截止 {{ fmtTime(g.deadline) }} · {{ g.order_count }} 筆 · {{ money(g.total) }}
         </div>
         <div v-if="g.note" class="muted">📝 {{ g.note }}</div>
       </div>

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import OrderForm from './OrderForm.vue'
-import { api, fmtTime, imageSrc, money, toLocalInput, userName } from '../api.js'
+import { api, fmtTime, imageSrc, money, toLocalInput, user } from '../api.js'
 
 const props = defineProps({ id: Number })
 
@@ -16,7 +16,7 @@ let timer
 
 const STATUS = { open: '進行中', closed: '已截止', locked: '已鎖單' }
 
-const isOwner = computed(() => group.value?.created_by === userName.value)
+const isOwner = computed(() => group.value?.created_by === user.value?.sub)
 // 用 now 即時判斷，截止時間一到畫面就自動變成已截止
 const status = computed(() => {
   const g = group.value
@@ -34,7 +34,7 @@ const paidTotal = computed(() =>
 const byPerson = computed(() => {
   const map = new Map()
   for (const o of orders.value) {
-    if (!map.has(o.created_by)) map.set(o.created_by, { name: o.created_by, orders: [], sum: 0 })
+    if (!map.has(o.created_by)) map.set(o.created_by, { id: o.created_by, name: o.created_by_name, orders: [], sum: 0 })
     const p = map.get(o.created_by)
     p.orders.push(o)
     p.sum += o.unit_price * o.quantity
@@ -129,7 +129,7 @@ onBeforeUnmount(() => clearInterval(timer))
           <span :class="['badge', status]">{{ STATUS[status] }}</span>
         </h2>
       </div>
-      <div class="muted">{{ group.created_by }} 開團 · 截止 {{ fmtTime(group.deadline) }}</div>
+      <div class="muted">{{ group.created_by_name }} 開團 · 截止 {{ fmtTime(group.deadline) }}</div>
       <div v-if="group.note" class="note">📝 {{ group.note }}</div>
 
       <form v-if="editingGroup" class="row" @submit.prevent="saveGroup">
@@ -161,7 +161,7 @@ onBeforeUnmount(() => clearInterval(timer))
 
     <h3>大家點的餐（{{ orders.length }} 筆）</h3>
     <p v-if="!orders.length" class="muted">還沒有人點餐。</p>
-    <div v-for="p in byPerson" :key="p.name" class="card col">
+    <div v-for="p in byPerson" :key="p.id" class="card col">
       <div class="row">
         <strong class="grow">{{ p.name }}</strong>
         <strong>{{ money(p.sum) }}</strong>
@@ -184,7 +184,7 @@ onBeforeUnmount(() => clearInterval(timer))
             <input type="checkbox" :checked="o.paid" :disabled="!isOwner" @change="togglePaid(o)" />
             已付款
           </label>
-          <template v-if="o.created_by === userName && isOpen">
+          <template v-if="o.created_by === user?.sub && isOpen">
             <button @click="editingOrder = { id: o.id, quantity: o.quantity, note: o.note }">編輯</button>
             <button class="danger" @click="removeOrder(o)">刪除</button>
           </template>

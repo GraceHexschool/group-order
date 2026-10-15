@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { setUserName, userName } from './api.js'
+import { signOut, user } from './api.js'
+import LoginView from './LoginView.vue'
 import GroupsView from './views/GroupsView.vue'
 import GroupView from './views/GroupView.vue'
 import ShopsView from './views/ShopsView.vue'
@@ -8,8 +9,19 @@ import MenuView from './views/MenuView.vue'
 
 const hash = ref(location.hash || '#/')
 const onHash = () => (hash.value = location.hash || '#/')
-onMounted(() => addEventListener('hashchange', onHash))
-onBeforeUnmount(() => removeEventListener('hashchange', onHash))
+
+// 通行證約 1 小時過期：到期就回到登入畫面
+let expiryTimer
+onMounted(() => {
+  addEventListener('hashchange', onHash)
+  expiryTimer = setInterval(() => {
+    if (user.value && user.value.exp * 1000 <= Date.now()) signOut('登入已過期，請重新登入')
+  }, 30000)
+})
+onBeforeUnmount(() => {
+  removeEventListener('hashchange', onHash)
+  clearInterval(expiryTimer)
+})
 
 const route = computed(() => {
   const parts = hash.value.replace(/^#\/?/, '').split('/').filter(Boolean)
@@ -18,30 +30,10 @@ const route = computed(() => {
   if (parts[0] === 'shops') return { view: ShopsView, props: {}, tab: 'shops' }
   return { view: GroupsView, props: {}, tab: 'groups' }
 })
-
-const draft = ref('')
-const editingName = ref(false)
-const save = () => {
-  if (!draft.value.trim()) return
-  setUserName(draft.value)
-  editingName.value = false
-}
-const startEdit = () => {
-  draft.value = userName.value
-  editingName.value = true
-}
 </script>
 
 <template>
-  <div v-if="!userName || editingName" class="welcome">
-    <form class="card" @submit.prevent="save">
-      <h1>🍱 團購訂餐</h1>
-      <p>請輸入你的名字，同事會看到你點的餐。</p>
-      <input v-model="draft" maxlength="30" placeholder="例如：小明" autofocus />
-      <button class="primary" :disabled="!draft.trim()">開始使用</button>
-      <button v-if="editingName" type="button" @click="editingName = false">取消</button>
-    </form>
-  </div>
+  <LoginView v-if="!user" />
 
   <div v-else class="app">
     <header>
@@ -50,7 +42,11 @@ const startEdit = () => {
         <a href="#/" :class="{ active: route.tab === 'groups' }">團購</a>
         <a href="#/shops" :class="{ active: route.tab === 'shops' }">店家與菜單</a>
       </nav>
-      <button class="link" @click="startEdit">👤 {{ userName }}</button>
+      <div class="me" :title="user.email">
+        <img v-if="user.picture" :src="user.picture" alt="" class="avatar" referrerpolicy="no-referrer" />
+        <span>{{ user.name }}</span>
+        <button @click="signOut()">登出</button>
+      </div>
     </header>
     <main>
       <component :is="route.view" v-bind="route.props" :key="hash" />

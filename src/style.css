@@ -67,3 +67,7 @@ summary { cursor: pointer; }
 .quick { flex-basis: 100%; border-top: 1px dashed var(--line); padding-top: 10px; }
 .quick .col { width: 100%; }
 .price { width: 90px; }
+
+.me { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; }
+.gbtn { display: flex; justify-content: center; min-height: 44px; }

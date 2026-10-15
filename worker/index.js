@@ -1,5 +1,7 @@
 // 所有資料讀寫都經過這支 Worker 的 /api，前端不直接碰 D1。
 
+import { verifyGoogleToken } from './auth.js'
+
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -50,17 +52,12 @@ function isoDate(v, field) {
   return d.toISOString()
 }
 
-// 目前尚未有 Google 登入：由前端傳來的名字當作 created_by（之後改成登入者）
+// 通過驗證的使用者：用 Google 的 sub 當 ID（created_by），名字與 email 只用來顯示
+const users = new WeakMap()
 function actor(request) {
-  const raw = request.headers.get('x-user-name')
-  let name = ''
-  try {
-    name = raw ? decodeURIComponent(raw).trim() : ''
-  } catch {
-    name = ''
-  }
-  if (!name) throw new HttpError(401, '請先輸入你的名字')
-  return name.slice(0, 30)
+  const user = users.get(request)
+  if (!user) throw new HttpError(401, '請先登入')
+  return user
 }
 
 async function body(request) {
@@ -95,9 +92,9 @@ async function createShop(request, env) {
   const note = str(b.note, '備註', { max: 200, required: false })
   const image = url(b.menu_image_url, '菜單照片連結')
   const row = await env.DB.prepare(
-    'INSERT INTO shops (name, note, menu_image_url, created_by) VALUES (?, ?, ?, ?) RETURNING *',
+    'INSERT INTO shops (name, note, menu_image_url, created_by, created_by_name, created_by_email) VALUES (?, ?, ?, ?, ?, ?) RETURNING *',
   )
-    .bind(name, note, image, by)
+    .bind(name, note, image, by.sub, by.name, by.email)
     .first()
   return json(row, 201)
 }
@@ -148,9 +145,9 @@ async function createItem(shopId, request, env) {
   const shop = await env.DB.prepare('SELECT id FROM shops WHERE id = ?').bind(shopId).first()
   if (!shop) throw notFound('找不到店家')
   const row = await env.DB.prepare(
-    'INSERT INTO menu_items (shop_id, name, price, created_by) VALUES (?, ?, ?, ?) RETURNING *',
+    'INSERT INTO menu_items (shop_id, name, price, created_by, created_by_name, created_by_email) VALUES (?, ?, ?, ?, ?, ?) RETURNING *',
   )
-    .bind(shopId, name, price, by)
+    .bind(shopId, name, price, by.sub, by.name, by.email)
     .first()
   return json(row, 201)
 }
@@ -197,9 +194,9 @@ async function createGroup(request, env) {
   const shop = await env.DB.prepare('SELECT id FROM shops WHERE id = ?').bind(shopId).first()
   if (!shop) throw bad('找不到這家店')
   const row = await env.DB.prepare(
-    'INSERT INTO groups (shop_id, deadline, note, created_by) VALUES (?, ?, ?, ?) RETURNING id',
+    'INSERT INTO groups (shop_id, deadline, note, created_by, created_by_name, created_by_email) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
   )
-    .bind(shopId, deadline, note, by)
+    .bind(shopId, deadline, note, by.sub, by.name, by.email)
     .first()
   return getGroup(row.id, env, 201)
 }
@@ -230,7 +227,7 @@ async function getGroupRow(id, env) {
 async function updateGroup(id, request, env) {
   const by = actor(request)
   const g = await getGroupRow(id, env)
-  if (g.created_by !== by) throw new HttpError(403, '只有團主可以修改這個團')
+  if (g.created_by !== by.sub) throw new HttpError(403, '只有團主可以修改這個團')
   const b = await body(request)
   const deadline = b.deadline !== undefined ? isoDate(b.deadline, '截止時間') : g.deadline
   const note = b.note !== undefined ? str(b.note, '團主附註', { max: 300, required: false }) : g.note
@@ -244,7 +241,7 @@ async function updateGroup(id, request, env) {
 async function deleteGroup(id, request, env) {
   const by = actor(request)
   const g = await getGroupRow(id, env)
-  if (g.created_by !== by) throw new HttpError(403, '只有團主可以刪除這個團')
+  if (g.created_by !== by.sub) throw new HttpError(403, '只有團主可以刪除這個團')
   await env.DB.prepare('DELETE FROM groups WHERE id = ?').bind(id).run()
   return json({ ok: true })
 }
@@ -264,10 +261,10 @@ async function createOrder(groupId, request, env) {
     .bind(g.shop_id, itemName)
     .first()
   const row = await env.DB.prepare(
-    `INSERT INTO orders (group_id, menu_item_id, item_name, unit_price, quantity, note, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+    `INSERT INTO orders (group_id, menu_item_id, item_name, unit_price, quantity, note, created_by, created_by_name, created_by_email)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
   )
-    .bind(groupId, item?.id ?? null, itemName, price, quantity, note, by)
+    .bind(groupId, item?.id ?? null, itemName, price, quantity, note, by.sub, by.name, by.email)
     .first()
   return json({ ...row, paid: !!row.paid }, 201)
 }
@@ -281,7 +278,7 @@ async function updateOrder(id, request, env) {
 
   // 「已付款」由團主勾選；不受截止／鎖單限制
   if (b.paid !== undefined) {
-    if (g.created_by !== by) throw new HttpError(403, '只有團主可以勾選已付款')
+    if (g.created_by !== by.sub) throw new HttpError(403, '只有團主可以勾選已付款')
     await env.DB.prepare('UPDATE orders SET paid = ? WHERE id = ?')
       .bind(b.paid ? 1 : 0, id)
       .run()
@@ -289,7 +286,7 @@ async function updateOrder(id, request, env) {
 
   // 數量／備註：只有點餐的人本人，且團還在進行中
   if (b.quantity !== undefined || b.note !== undefined) {
-    if (o.created_by !== by) throw new HttpError(403, '只能修改自己的點餐')
+    if (o.created_by !== by.sub) throw new HttpError(403, '只能修改自己的點餐')
     if (groupStatus(g) !== 'open') throw new HttpError(409, '這個團已截止或鎖單，不能再修改')
     const quantity = b.quantity !== undefined ? int(b.quantity, '數量', { min: 1, max: 99 }) : o.quantity
     const note = b.note !== undefined ? str(b.note, '備註', { max: 100, required: false }) : o.note
@@ -306,7 +303,7 @@ async function deleteOrder(id, request, env) {
   const by = actor(request)
   const o = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first()
   if (!o) throw notFound()
-  if (o.created_by !== by) throw new HttpError(403, '只能刪除自己的點餐')
+  if (o.created_by !== by.sub) throw new HttpError(403, '只能刪除自己的點餐')
   const g = await getGroupRow(o.group_id, env)
   if (groupStatus(g) !== 'open') throw new HttpError(409, '這個團已截止或鎖單，不能再刪除')
   await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(id).run()
@@ -337,6 +334,13 @@ export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url)
     if (!pathname.startsWith('/api/')) return json({ error: '找不到網頁' }, 404)
+
+    // 每個 /api 請求先驗證 Google 通行證；沒過（或 GOOGLE_CLIENT_ID 沒設定）一律 401，不碰 D1
+    const auth = request.headers.get('authorization') || ''
+    const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+    const user = await verifyGoogleToken(token, env.GOOGLE_CLIENT_ID)
+    if (!user) return json({ error: '請先用公司 Google 帳號登入' }, 401)
+    users.set(request, user)
 
     try {
       let pathMatched = false
