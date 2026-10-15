@@ -12,6 +12,13 @@
 	"ai": {
 		"binding": "AI"
 	},
+	"triggers": {
+		"crons": ["0 6 * * *"]
+	},
+	"vars": {
+		"APP_URL": "https://group-order.grace-3a4.workers.dev",
+		"REMINDER_FROM": "團購訂餐 <onboarding@resend.dev>"
+	},
 	"observability": {
 		"enabled": true
 	},

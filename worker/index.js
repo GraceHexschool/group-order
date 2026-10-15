@@ -2,6 +2,7 @@
 
 import { verifyGoogleToken } from './auth.js'
 import { MenuAiError, recognizeMenu } from './menu-ai.js'
+import { sendPaymentReminders } from './reminders.js'
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -376,6 +377,11 @@ const routes = [
 ]
 
 export default {
+  // Cron（wrangler.jsonc 的 triggers.crons）：每天 06:00 UTC = 台灣 14:00
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(sendPaymentReminders(env))
+  },
+
   async fetch(request, env) {
     const { pathname } = new URL(request.url)
     if (!pathname.startsWith('/api/')) return json({ error: '找不到網頁' }, 404)
