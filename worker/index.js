@@ -1,6 +1,7 @@
 // 所有資料讀寫都經過這支 Worker 的 /api，前端不直接碰 D1。
 
 import { verifyGoogleToken } from './auth.js'
+import { MenuAiError, recognizeMenu } from './menu-ai.js'
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -150,6 +151,48 @@ async function createItem(shopId, request, env) {
     .bind(shopId, name, price, by.sub, by.name, by.email)
     .first()
   return json(row, 201)
+}
+
+// 從菜單照片辨識品項：只回傳建議，使用者確認後才寫入
+async function recognizeShopMenu(shopId, request, env) {
+  actor(request)
+  const shop = await env.DB.prepare('SELECT * FROM shops WHERE id = ?').bind(shopId).first()
+  if (!shop) throw notFound('找不到店家')
+  if (!shop.menu_image_url) throw bad('這家店還沒有菜單照片連結')
+  const [items, { results: existing }] = await Promise.all([
+    recognizeMenu(env, shop.menu_image_url),
+    env.DB.prepare('SELECT name FROM menu_items WHERE shop_id = ?').bind(shopId).all(),
+  ])
+  const have = new Set(existing.map((e) => e.name))
+  return json({ items: items.map((i) => ({ ...i, exists: have.has(i.name) })) })
+}
+
+// 一次加入多個品項（已存在的同名品項會略過）
+async function createItems(shopId, request, env) {
+  const by = actor(request)
+  const b = await body(request)
+  if (!Array.isArray(b.items) || !b.items.length || b.items.length > 100) throw bad('品項數量必須是 1–100 個')
+  const shop = await env.DB.prepare('SELECT id FROM shops WHERE id = ?').bind(shopId).first()
+  if (!shop) throw notFound('找不到店家')
+  const items = b.items.map((i) => ({
+    name: str(i?.name, '品名', { max: 50 }),
+    price: int(i?.price, '單價', { max: 100000 }),
+  }))
+  const { results: existing } = await env.DB.prepare('SELECT name FROM menu_items WHERE shop_id = ?')
+    .bind(shopId)
+    .all()
+  const have = new Set(existing.map((e) => e.name))
+  const fresh = items.filter((i) => !have.has(i.name) && have.add(i.name))
+  if (fresh.length) {
+    await env.DB.batch(
+      fresh.map((i) =>
+        env.DB.prepare(
+          'INSERT INTO menu_items (shop_id, name, price, created_by, created_by_name, created_by_email) VALUES (?, ?, ?, ?, ?, ?)',
+        ).bind(shopId, i.name, i.price, by.sub, by.name, by.email),
+      ),
+    )
+  }
+  return json({ added: fresh.length, skipped: items.length - fresh.length }, 201)
 }
 
 async function updateItem(id, request, env) {
@@ -318,6 +361,8 @@ const routes = [
   ['DELETE', /^\/api\/shops\/(\d+)$/, (m, r, env) => deleteShop(+m[1], r, env)],
   ['GET', /^\/api\/shops\/(\d+)\/items$/, (m, _r, env) => listMenu(+m[1], env)],
   ['POST', /^\/api\/shops\/(\d+)\/items$/, (m, r, env) => createItem(+m[1], r, env)],
+  ['POST', /^\/api\/shops\/(\d+)\/recognize-menu$/, (m, r, env) => recognizeShopMenu(+m[1], r, env)],
+  ['POST', /^\/api\/shops\/(\d+)\/items\/bulk$/, (m, r, env) => createItems(+m[1], r, env)],
   ['PUT', /^\/api\/items\/(\d+)$/, (m, r, env) => updateItem(+m[1], r, env)],
   ['DELETE', /^\/api\/items\/(\d+)$/, (m, r, env) => deleteItem(+m[1], r, env)],
   ['GET', /^\/api\/groups$/, (_m, _r, env) => listGroups(env)],
@@ -352,6 +397,7 @@ export default {
       }
       return json({ error: pathMatched ? '不支援的請求方法' : '找不到 API' }, pathMatched ? 405 : 404)
     } catch (err) {
+      if (err instanceof MenuAiError) return json({ error: err.message }, err.status)
       if (err instanceof HttpError) return json({ error: err.message }, err.status)
       console.error(err)
       return json({ error: '伺服器發生錯誤' }, 500)

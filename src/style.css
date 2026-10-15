@@ -73,3 +73,5 @@ summary { cursor: pointer; }
 .gbtn { display: flex; justify-content: center; min-height: 44px; }
 
 .pick { width: 100%; }
+
+.found input[type=checkbox] { flex: none; }

@@ -19,15 +19,22 @@ async function run(fn) {
     error.value = e.message
   }
 }
+// 有貼菜單照片連結時，存完直接跳到菜單頁並自動辨識
+const scan = (id) => (location.hash = `#/shops/${id}?scan=1`)
 const add = () =>
   run(async () => {
-    await api('/shops', { method: 'POST', body: form.value })
+    const shop = await api('/shops', { method: 'POST', body: form.value })
+    const hasImage = !!form.value.menu_image_url.trim()
     form.value = { name: '', note: '', menu_image_url: '' }
+    if (hasImage) scan(shop.id)
   })
 const saveEdit = () =>
   run(async () => {
-    await api(`/shops/${editing.value.id}`, { method: 'PUT', body: editing.value })
+    const { id, menu_image_url } = editing.value
+    const before = shops.value.find((s) => s.id === id)?.menu_image_url || ''
+    await api(`/shops/${id}`, { method: 'PUT', body: editing.value })
     editing.value = null
+    if (menu_image_url.trim() && menu_image_url.trim() !== before) scan(id)
   })
 const remove = (s) => {
   if (confirm(`確定刪除「${s.name}」與它的菜單？`)) run(() => api(`/shops/${s.id}`, { method: 'DELETE' }))

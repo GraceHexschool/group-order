@@ -24,9 +24,11 @@ onBeforeUnmount(() => {
 })
 
 const route = computed(() => {
-  const parts = hash.value.replace(/^#\/?/, '').split('/').filter(Boolean)
+  const [path, query = ''] = hash.value.replace(/^#\/?/, '').split('?')
+  const parts = path.split('/').filter(Boolean)
+  const scan = new URLSearchParams(query).has('scan')
   if (parts[0] === 'groups' && parts[1]) return { view: GroupView, props: { id: Number(parts[1]) }, tab: 'groups' }
-  if (parts[0] === 'shops' && parts[1]) return { view: MenuView, props: { shopId: Number(parts[1]) }, tab: 'shops' }
+  if (parts[0] === 'shops' && parts[1]) return { view: MenuView, props: { shopId: Number(parts[1]), autoScan: scan }, tab: 'shops' }
   if (parts[0] === 'shops') return { view: ShopsView, props: {}, tab: 'shops' }
   return { view: GroupsView, props: {}, tab: 'groups' }
 })
