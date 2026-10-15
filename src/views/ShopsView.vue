@@ -4,7 +4,7 @@ import { api } from '../api.js'
 
 const shops = ref([])
 const error = ref('')
-const form = ref({ name: '', note: '' })
+const form = ref({ name: '', note: '', menu_image_url: '' })
 const editing = ref(null) // { id, name, note }
 
 async function load() {
@@ -22,7 +22,7 @@ async function run(fn) {
 const add = () =>
   run(async () => {
     await api('/shops', { method: 'POST', body: form.value })
-    form.value = { name: '', note: '' }
+    form.value = { name: '', note: '', menu_image_url: '' }
   })
 const saveEdit = () =>
   run(async () => {
@@ -42,6 +42,7 @@ onMounted(() => run(async () => {}))
   <form class="card row" @submit.prevent="add">
     <input v-model="form.name" placeholder="店家名稱" maxlength="50" required />
     <input v-model="form.note" placeholder="備註（電話、營業時間…）" maxlength="200" />
+    <input v-model="form.menu_image_url" type="url" placeholder="菜單照片連結（選填，例如 Google Drive 分享連結）" maxlength="500" />
     <button class="primary">新增店家</button>
   </form>
 
@@ -52,6 +53,7 @@ onMounted(() => run(async () => {}))
         <form class="row" @submit.prevent="saveEdit">
           <input v-model="editing.name" maxlength="50" required />
           <input v-model="editing.note" maxlength="200" />
+          <input v-model="editing.menu_image_url" type="url" placeholder="菜單照片連結" maxlength="500" />
           <button class="primary">儲存</button>
           <button type="button" @click="editing = null">取消</button>
         </form>
@@ -61,9 +63,10 @@ onMounted(() => run(async () => {}))
           <a :href="`#/shops/${s.id}`" class="title">{{ s.name }}</a>
           <span class="muted"> · {{ s.item_count }} 個品項 · {{ s.created_by }} 建立</span>
           <div v-if="s.note" class="muted">{{ s.note }}</div>
+          <a v-if="s.menu_image_url" :href="s.menu_image_url" target="_blank" rel="noopener" class="muted">📷 菜單照片</a>
         </div>
         <a :href="`#/shops/${s.id}`" class="btn">菜單</a>
-        <button @click="editing = { id: s.id, name: s.name, note: s.note }">編輯</button>
+        <button @click="editing = { id: s.id, name: s.name, note: s.note, menu_image_url: s.menu_image_url }">編輯</button>
         <button class="danger" @click="remove(s)">刪除</button>
       </template>
     </li>

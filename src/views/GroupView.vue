@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { api, fmtTime, money, toLocalInput, userName } from '../api.js'
+import { api, fmtTime, imageSrc, money, toLocalInput, userName } from '../api.js'
 
 const props = defineProps({ id: Number })
 
@@ -155,6 +155,13 @@ onBeforeUnmount(() => clearInterval(timer))
         <button class="danger" @click="removeGroup">刪除這個團</button>
       </div>
     </div>
+
+    <details v-if="group.shop_menu_image_url" class="card col">
+      <summary>📷 看菜單照片</summary>
+      <a :href="group.shop_menu_image_url" target="_blank" rel="noopener">
+        <img :src="imageSrc(group.shop_menu_image_url)" alt="菜單照片" class="menu-img" loading="lazy" />
+      </a>
+    </details>
 
     <h3>我要點餐</h3>
     <p v-if="!isOpen" class="muted">這個團已{{ status === 'locked' ? '鎖單' : '截止' }}，不能再點餐。</p>

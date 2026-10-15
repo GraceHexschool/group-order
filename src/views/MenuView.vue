@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { api, money } from '../api.js'
+import { api, imageSrc, money } from '../api.js'
 
 const props = defineProps({ shopId: Number })
 const shop = ref(null)
@@ -44,6 +44,9 @@ onMounted(() => run(async () => {}))
   <h2>{{ shop?.name }} 的菜單</h2>
   <p v-if="shop?.note" class="muted">{{ shop.note }}</p>
   <p v-if="error" class="error">{{ error }}</p>
+  <a v-if="shop?.menu_image_url" :href="shop.menu_image_url" target="_blank" rel="noopener">
+    <img :src="imageSrc(shop.menu_image_url)" alt="菜單照片" class="menu-img" />
+  </a>
 
   <form class="card row" @submit.prevent="add">
     <input v-model="form.name" placeholder="品名" maxlength="50" required />

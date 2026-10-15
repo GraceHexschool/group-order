@@ -30,6 +30,20 @@ function int(v, field, { min = 0, max = 1_000_000 } = {}) {
   return n
 }
 
+function url(v, field) {
+  const s = typeof v === 'string' ? v.trim() : ''
+  if (!s) return ''
+  if (s.length > 500) throw bad(`${field}太長`)
+  let u
+  try {
+    u = new URL(s)
+  } catch {
+    throw bad(`${field}不是有效的網址`)
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw bad(`${field}必須是 http(s) 網址`)
+  return s
+}
+
 function isoDate(v, field) {
   const d = new Date(v)
   if (typeof v !== 'string' || Number.isNaN(d.getTime())) throw bad(`${field}格式不正確`)
@@ -79,10 +93,11 @@ async function createShop(request, env) {
   const b = await body(request)
   const name = str(b.name, '店家名稱', { max: 50 })
   const note = str(b.note, '備註', { max: 200, required: false })
+  const image = url(b.menu_image_url, '菜單照片連結')
   const row = await env.DB.prepare(
-    'INSERT INTO shops (name, note, created_by) VALUES (?, ?, ?) RETURNING *',
+    'INSERT INTO shops (name, note, menu_image_url, created_by) VALUES (?, ?, ?, ?) RETURNING *',
   )
-    .bind(name, note, by)
+    .bind(name, note, image, by)
     .first()
   return json(row, 201)
 }
@@ -92,8 +107,11 @@ async function updateShop(id, request, env) {
   const b = await body(request)
   const name = str(b.name, '店家名稱', { max: 50 })
   const note = str(b.note, '備註', { max: 200, required: false })
-  const row = await env.DB.prepare('UPDATE shops SET name = ?, note = ? WHERE id = ? RETURNING *')
-    .bind(name, note, id)
+  const image = url(b.menu_image_url, '菜單照片連結')
+  const row = await env.DB.prepare(
+    'UPDATE shops SET name = ?, note = ?, menu_image_url = ? WHERE id = ? RETURNING *',
+  )
+    .bind(name, note, image, id)
     .first()
   if (!row) throw notFound()
   return json(row)
@@ -160,7 +178,7 @@ async function deleteItem(id, request, env) {
 
 // ---- 開團 ----
 const GROUP_SELECT = `
-  SELECT g.*, s.name AS shop_name,
+  SELECT g.*, s.name AS shop_name, s.menu_image_url AS shop_menu_image_url,
     (SELECT COUNT(*) FROM orders o WHERE o.group_id = g.id) AS order_count,
     (SELECT COALESCE(SUM(o.unit_price * o.quantity), 0) FROM orders o WHERE o.group_id = g.id) AS total
   FROM groups g JOIN shops s ON s.id = g.shop_id`

@@ -51,3 +51,9 @@ export function toLocalInput(date) {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
   return d.toISOString().slice(0, 16)
 }
+
+// Google Drive 分享連結不能直接當 <img>，轉成縮圖網址（檔案需設為「知道連結的人可檢視」）
+export function imageSrc(link) {
+  const m = link && link.match(/drive\.google\.com\/file\/d\/([\w-]+)/)
+  return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1200` : link
+}
