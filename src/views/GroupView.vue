@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import OrderForm from './OrderForm.vue'
 import { api, fmtTime, imageSrc, money, toLocalInput, userName } from '../api.js'
 
 const props = defineProps({ id: Number })
@@ -8,7 +9,6 @@ const group = ref(null)
 const menu = ref([])
 const orders = ref([])
 const error = ref('')
-const form = ref({ menu_item_id: '', quantity: 1, note: '' })
 const editingOrder = ref(null) // { id, quantity, note }
 const editingGroup = ref(null) // { deadline, note }
 const now = ref(Date.now())
@@ -58,7 +58,6 @@ async function load() {
   group.value = data.group
   menu.value = data.menu
   orders.value = data.orders
-  if (!form.value.menu_item_id && menu.value.length) form.value.menu_item_id = menu.value[0].id
 }
 async function run(fn) {
   error.value = ''
@@ -70,15 +69,6 @@ async function run(fn) {
   }
 }
 
-const addOrder = () =>
-  run(async () => {
-    await api(`/groups/${props.id}/orders`, {
-      method: 'POST',
-      body: { ...form.value, menu_item_id: Number(form.value.menu_item_id) },
-    })
-    form.value.quantity = 1
-    form.value.note = ''
-  })
 const saveOrder = () =>
   run(async () => {
     await api(`/orders/${editingOrder.value.id}`, {
@@ -165,17 +155,9 @@ onBeforeUnmount(() => clearInterval(timer))
 
     <h3>我要點餐</h3>
     <p v-if="!isOpen" class="muted">這個團已{{ status === 'locked' ? '鎖單' : '截止' }}，不能再點餐。</p>
-    <p v-else-if="!menu.length" class="muted">
-      這家店還沒有菜單，請先<a :href="`#/shops/${group.shop_id}`">新增品項</a>。
-    </p>
-    <form v-else class="card row" @submit.prevent="addOrder">
-      <select v-model="form.menu_item_id" required>
-        <option v-for="m in menu" :key="m.id" :value="m.id">{{ m.name }}　{{ money(m.price) }}</option>
-      </select>
-      <input v-model="form.quantity" type="number" min="1" max="99" class="qty" required />
-      <input v-model="form.note" maxlength="100" placeholder="備註（少冰、不要香菜…）" />
-      <button class="primary">加入</button>
-    </form>
+    <div v-else class="card col">
+      <OrderForm :group-id="id" :menu="menu" @added="load" />
+    </div>
 
     <h3>大家點的餐（{{ orders.length }} 筆）</h3>
     <p v-if="!orders.length" class="muted">還沒有人點餐。</p>

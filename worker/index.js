@@ -255,18 +255,19 @@ async function createOrder(groupId, request, env) {
   const g = await getGroupRow(groupId, env)
   if (groupStatus(g) !== 'open') throw new HttpError(409, '這個團已截止或鎖單，不能再點餐')
   const b = await body(request)
-  const itemId = int(b.menu_item_id, '品項', { min: 1 })
+  const itemName = str(b.item_name, '餐點', { max: 50 })
+  const price = int(b.unit_price, '價格', { max: 100000 })
   const quantity = int(b.quantity, '數量', { min: 1, max: 99 })
   const note = str(b.note, '備註', { max: 100, required: false })
-  const item = await env.DB.prepare('SELECT * FROM menu_items WHERE id = ? AND shop_id = ?')
-    .bind(itemId, g.shop_id)
+  // 餐點與價格由點餐的人直接輸入；若剛好在菜單內就順便記下對應品項
+  const item = await env.DB.prepare('SELECT id FROM menu_items WHERE shop_id = ? AND name = ?')
+    .bind(g.shop_id, itemName)
     .first()
-  if (!item) throw bad('這個品項不在這家店的菜單內')
   const row = await env.DB.prepare(
     `INSERT INTO orders (group_id, menu_item_id, item_name, unit_price, quantity, note, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`,
   )
-    .bind(groupId, item.id, item.name, item.price, quantity, note, by)
+    .bind(groupId, item?.id ?? null, itemName, price, quantity, note, by)
     .first()
   return json({ ...row, paid: !!row.paid }, 201)
 }

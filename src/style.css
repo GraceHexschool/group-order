@@ -62,3 +62,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 .menu-img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); margin-top: 8px; }
 summary { cursor: pointer; }
+
+.list > .card { flex-wrap: wrap; }
+.quick { flex-basis: 100%; border-top: 1px dashed var(--line); padding-top: 10px; }
+.quick .col { width: 100%; }
+.price { width: 90px; }

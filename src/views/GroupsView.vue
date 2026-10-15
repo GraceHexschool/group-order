@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import OrderForm from './OrderForm.vue'
 import { api, fmtTime, money, toLocalInput } from '../api.js'
 
 const groups = ref([])
@@ -69,7 +70,10 @@ onMounted(() => load().catch((e) => (error.value = e.message)))
         </div>
         <div v-if="g.note" class="muted">📝 {{ g.note }}</div>
       </div>
-      <a :href="`#/groups/${g.id}`" class="btn">進入</a>
+      <a :href="`#/groups/${g.id}`" class="btn">詳情</a>
+      <div v-if="g.status === 'open'" class="quick">
+        <OrderForm :group-id="g.id" @added="load" />
+      </div>
     </li>
   </ul>
 </template>
