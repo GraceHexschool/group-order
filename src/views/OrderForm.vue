@@ -10,6 +10,17 @@ const form = ref({ item_name: '', unit_price: '', quantity: 1, note: '' })
 const error = ref('')
 const busy = ref(false)
 const listId = `menu-${props.groupId}`
+const pick = ref('')
+
+// 從菜單下拉選一項，就帶入餐點和價格（之後仍可自己改）
+function choose() {
+  const hit = props.menu.find((m) => m.id === Number(pick.value))
+  if (hit) {
+    form.value.item_name = hit.name
+    form.value.unit_price = hit.price
+  }
+  pick.value = ''
+}
 
 watch(
   () => form.value.item_name,
@@ -44,6 +55,10 @@ async function submit() {
 
 <template>
   <form class="col" @submit.prevent="submit">
+    <select v-if="menu.length" v-model="pick" class="pick" @change="choose">
+      <option value="">📋 從菜單選（{{ menu.length }} 項）</option>
+      <option v-for="m in menu" :key="m.id" :value="m.id">{{ m.name }}　{{ money(m.price) }}</option>
+    </select>
     <div class="row">
       <input v-model="form.item_name" :list="listId" maxlength="50" placeholder="想吃什麼？" required />
       <input v-model="form.unit_price" type="number" min="0" step="1" class="price" placeholder="價格" required />

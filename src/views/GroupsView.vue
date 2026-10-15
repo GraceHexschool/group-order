@@ -5,6 +5,7 @@ import { api, fmtTime, money, toLocalInput } from '../api.js'
 
 const groups = ref([])
 const shops = ref([])
+const menus = ref({}) // shop_id -> 品項
 const error = ref('')
 const defaultDeadline = () => toLocalInput(Date.now() + 60 * 60 * 1000)
 const form = ref({ shop_id: '', deadline: defaultDeadline(), note: '' })
@@ -14,6 +15,10 @@ const STATUS = { open: '進行中', closed: '已截止', locked: '已鎖單' }
 async function load() {
   ;[groups.value, shops.value] = await Promise.all([api('/groups'), api('/shops')])
   if (!form.value.shop_id && shops.value.length) form.value.shop_id = shops.value[0].id
+  // 進行中的團要能直接從菜單選餐點
+  const ids = [...new Set(groups.value.filter((g) => g.status === 'open').map((g) => g.shop_id))]
+  const loaded = await Promise.all(ids.map((id) => api(`/shops/${id}/items`)))
+  menus.value = Object.fromEntries(ids.map((id, i) => [id, loaded[i].items]))
 }
 async function create() {
   error.value = ''
@@ -72,7 +77,7 @@ onMounted(() => load().catch((e) => (error.value = e.message)))
       </div>
       <a :href="`#/groups/${g.id}`" class="btn">詳情</a>
       <div v-if="g.status === 'open'" class="quick">
-        <OrderForm :group-id="g.id" @added="load" />
+        <OrderForm :group-id="g.id" :menu="menus[g.shop_id] || []" @added="load" />
       </div>
     </li>
   </ul>
